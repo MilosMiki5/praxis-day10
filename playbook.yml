@@ -1,19 +1,36 @@
 ---
-- name: Play 1 - Terraform Infrastructure Sync
+- name: Step 1 - Update AWS Security Group via Terraform
   hosts: localhost
   connection: local
+  gather_facts: no
   tasks:
-    - name: Ensure Terraform infrastructure is applied
+    - name: Apply updated Security Group rules in tag07
       ansible.builtin.command:
         cmd: terraform apply -auto-approve
-      register: tf_result
-      changed_when: tf_result.rc == 0
+        chdir: "tag07"
+      register: tf_output
+      changed_when: "'1 added' in tf_output.stdout or '1 changed' in tf_output.stdout or 'Apply complete!' in tf_output.stdout"
 
-- name: Play 2 - Configure VM and Deploy Monitoring Stack
-  hosts: tag_Name_sonarqube_server:tag_Name_sonarqube:all
-  become: true
+    - name: Display Terraform output
+      ansible.builtin.debug:
+        var: tf_output.stdout_lines
+
+- name: Step 2 - Setup Monitoring Environment (cAdvisor, Prometheus, Grafana) on SonarQube VM
+  hosts: tag_Name_sonarqube:tag_Name_sonarqube_server:sonarqube:sonarqube_server:all
+  become: yes
+  vars:
+    repo_url: "https://gitlab.com/ser-cal/m169-scripts.git"
+    clone_dest: "/home/ubuntu/m169-scripts"
+    monitoring_dir: "/home/ubuntu/m169-scripts/KN05_B"
+    app_user: "ubuntu"
+
   tasks:
-    - name: Update apt cache and install required packages
+    - name: Update apt package cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages (Git, Docker, Docker Compose)
       ansible.builtin.apt:
         name:
           - git
@@ -21,57 +38,16 @@
           - docker-compose-v2
           - curl
         state: present
-        update_cache: true
 
-    - name: Ensure Docker service is enabled and started
+    - name: Ensure Docker service is running and enabled
       ansible.builtin.systemd:
         name: docker
         state: started
-        enabled: true
+        enabled: yes
 
-    - name: Add ubuntu user to docker group
+    - name: Ensure user belongs to docker group
       ansible.builtin.user:
-        name: ubuntu
+        name: "{{ app_user }}"
         groups: docker
-        append: true
+        append: yes
 
-    - name: Clone m169-scripts repository
-      ansible.builtin.git:
-        repo: 'https://gitlab.com/ser-cal/m169-scripts.git'
-        dest: /home/ubuntu/m169-scripts
-        version: HEAD
-        force: true
-
-    - name: Create Systemd Service for Monitoring Stack (Grafana, Prometheus, cAdvisor)
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/monitoring.service
-        mode: '0644'
-        content: |
-          [Unit]
-          Description=Docker Compose Monitoring Stack (Grafana, Prometheus, cAdvisor)
-          Requires=docker.service
-          After=docker.service
-
-          [Service]
-          Type=oneshot
-          RemainAfterExit=yes
-          WorkingDirectory=/home/ubuntu/m169-scripts/KN05_B
-          ExecStart=/usr/bin/docker compose up -d
-          ExecStop=/usr/bin/docker compose down
-          TimeoutStartSec=0
-
-          [Install]
-          WantedBy=multi-user.target
-      notify: Reload systemd
-
-    - name: Enable and start Monitoring systemd service
-      ansible.builtin.systemd:
-        name: monitoring
-        state: started
-        enabled: true
-        daemon_reload: true
-
-  handlers:
-    - name: Reload systemd
-      ansible.builtin.systemd:
-        daemon_reload: true

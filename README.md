@@ -33,6 +33,11 @@ In diesem Praxisauftrag erweitern Sie die Infrastruktur aus **Tag 07** (SonarQub
 
 ## Aufgabenstellung: Schritt-für-Schritt Erweiterung
 
+### 0. Terraform State kopieren  
+
+Falls ihr noch die laufende Umgebung von Sonarqube-Umgebung habt, dann solltet ihr aus dem diretory tag07 des Repos das ihr benutzt habt den terraform.state in das tag07 directory dieses Repos kopieren. Sonst bekommt ihr 2 Sonarqube server auf der AWS...
+
+
 ### 1. Terraform Security Group anpassen (`sonarqube-vm.tf`)
 
 Erweitern Sie das Terraform-Manifest aus Tag 07 (`sonarqube-vm.tf`), um die Ports für die Monitoring-Dienste freizuschalten:
