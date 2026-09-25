@@ -1,0 +1,77 @@
+---
+- name: Play 1 - Terraform Infrastructure Sync
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Ensure Terraform infrastructure is applied
+      ansible.builtin.command:
+        cmd: terraform apply -auto-approve
+      register: tf_result
+      changed_when: tf_result.rc == 0
+
+- name: Play 2 - Configure VM and Deploy Monitoring Stack
+  hosts: tag_Name_sonarqube_server:tag_Name_sonarqube:all
+  become: true
+  tasks:
+    - name: Update apt cache and install required packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - docker.io
+          - docker-compose-v2
+          - curl
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker service is enabled and started
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ubuntu user to docker group
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    - name: Clone m169-scripts repository
+      ansible.builtin.git:
+        repo: 'https://gitlab.com/ser-cal/m169-scripts.git'
+        dest: /home/ubuntu/m169-scripts
+        version: HEAD
+        force: true
+
+    - name: Create Systemd Service for Monitoring Stack (Grafana, Prometheus, cAdvisor)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/monitoring.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Docker Compose Monitoring Stack (Grafana, Prometheus, cAdvisor)
+          Requires=docker.service
+          After=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/home/ubuntu/m169-scripts/KN05_B
+          ExecStart=/usr/bin/docker compose up -d
+          ExecStop=/usr/bin/docker compose down
+          TimeoutStartSec=0
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Enable and start Monitoring systemd service
+      ansible.builtin.systemd:
+        name: monitoring
+        state: started
+        enabled: true
+        daemon_reload: true
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true

@@ -1,0 +1,54 @@
+#cloud-config
+
+package_upgrade: true 
+package-update: true  
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - curl
+
+write_files:
+  - path: /opt/sonarqube/docker-compose.yml
+    permissions: '0644'
+    encoding: base64
+    content: |
+       dmVyc2lvbjogJzMuOCcKc2VydmljZXM6CiAgcG9zdGdyZXNxbDoKICAgIGltYWdlOiBwb3N0Z3JlczoxNwogICAgZW52aXJvbm1lbnQ6CiAgICAgIFBPU1RHUkVTX1VTRVI6IHNvbmFyCiAgICAgIFBPU1RHUkVTX1BBU1NXT1JEOiBzb25hcnBhc3N3b3JkMTIzCiAgICAgIFBPU1RHUkVTX0RCOiBzb25hcgogICAgdm9sdW1lczoKICAgICAgLSBwb3N0Z3Jlc19kYXRhOi92YXIvbGliL3Bvc3RncmVzcWwvZGF0YQogICAgaGVhbHRoY2hlY2s6CiAgICAgIHRlc3Q6IFsiQ01ELVNIRUxMIiwgInBnX2lzcmVhZHkgLVUgc29uYXIiXQogICAgICBpbnRlcnZhbDogMTBzCiAgICAgIHRpbWVvdXQ6IDVzCiAgICAgIHJldHJpZXM6IDUKICAgIG5ldHdvcmtzOgogICAgICAtIHNvbmFybmV0CgogIHNvbmFycXViZToKICAgIGltYWdlOiBzb25hcnF1YmU6Y29tbXVuaXR5CiAgICBwb3J0czoKICAgICAgLSAiOTAwMDo5MDAwIgogICAgZW52aXJvbm1lbnQ6CiAgICAgIFNPTkFSX0pEQkNfVVJMOiBqZGJjOnBvc3RncmVzcWw6Ly9wb3N0Z3Jlc3FsOjU0MzIvc29uYXIKICAgICAgU09OQVJfSkRCQ19VU0VSTkFNRTogc29uYXIKICAgICAgU09OQVJfSkRCQ19QQVNTV09SRDogc29uYXJwYXNzd29yZDEyMwogICAgdm9sdW1lczoKICAgICAgLSBzb25hcnF1YmVfZGF0YTovb3B0L3NvbmFycXViZS9kYXRhCiAgICAgIC0gc29uYXJxdWJlX2xvZ3M6L29wdC9zb25hcnF1YmUvbG9ncwogICAgZGVwZW5kc19vbjoKICAgICAgcG9zdGdyZXNxbDoKICAgICAgICBjb25kaXRpb246IHNlcnZpY2VfaGVhbHRoeQogICAgbmV0d29ya3M6CiAgICAgIC0gc29uYXJuZXQKCnZvbHVtZXM6CiAgcG9zdGdyZXNfZGF0YToKICBzb25hcnF1YmVfZGF0YToKICBzb25hcnF1YmVfbG9nczoKCm5ldHdvcmtzOgogIHNvbmFybmV0OgogICAgZHJpdmVyOiBicmlkZ2UK
+
+  - path: /etc/systemd/system/sonarqube.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=SonarQube Service
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      WorkingDirectory=/opt/sonarqube
+      ExecStart=/usr/bin/docker compose up -d
+      ExecStop=/usr/bin/docker compose down
+      RemainAfterExit=yes
+      Restart=on-failure
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  # Create SonarQube directory
+  - mkdir -p /opt/sonarqube
+
+  # Start Docker
+  - systemctl start docker
+  - systemctl enable docker
+  - usermod -aG docker ubuntu
+  - usermod -s /bin/bash ubuntu
+
+  # Enable and start SonarQube service
+  - systemctl daemon-reload
+  - systemctl enable sonarqube.service
+  - systemctl start sonarqube.service
+
+  # Wait for SonarQube to be ready
+  - sleep 60

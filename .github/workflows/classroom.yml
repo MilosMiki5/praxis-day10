@@ -1,0 +1,45 @@
+name: GitHub Classroom Workflow
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  autograding:
+    name: Abnahmekriterien prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pyyaml
+
+      - name: Abnahmekriterien
+        id: abnahmekriterien
+        env:
+          CLASSROOM_RESULTS: ${{ runner.temp }}/classroom-results.tsv
+        run: |
+          chmod +x .github/classroom/grade.sh
+          bash .github/classroom/grade.sh || true
+          python .github/classroom/report_score.py
+
+      - name: Autograding Reporter
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          ABNAHMEKRITERIEN_RESULTS: "${{ steps.abnahmekriterien.outputs.result }}"
+        with:
+          runners: abnahmekriterien
