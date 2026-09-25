@@ -205,7 +205,7 @@ def check_step_4_ansible_playbook():
             "Füge den Benutzer ubuntu mit ansible.builtin.user zur Gruppe docker hinzu.",
         )
         check(
-            "Step 4: Task 'git' klont Monitoring-Repository (m169-scripts)",
+            "Step 4: Task 'git' klont Monitoring-Repository (repo: https://gitlab.com/ser-cal/m169-scripts.git, dest: /home/ubuntu/m169-scripts)",
             False,
             "Klone das Repository https://gitlab.com/ser-cal/m169-scripts.git nach /home/ubuntu/m169-scripts.",
         )
@@ -215,14 +215,19 @@ def check_step_4_ansible_playbook():
             "Setze Rechte/Owner für /home/ubuntu/m169-scripts auf ubuntu.",
         )
         check(
-            "Step 4: Task 'copy' erstellt /etc/systemd/system/monitoring.service für Stack in KN05_B",
+            "Step 4: Task 'copy' erstellt /etc/systemd/system/monitoring.service mit WorkingDirectory, ExecStart/ExecStop & mode: '0644'",
             False,
-            "Erstelle /etc/systemd/system/monitoring.service mit WorkingDirectory=/home/ubuntu/m169-scripts/KN05_B.",
+            "Erstelle /etc/systemd/system/monitoring.service mit mode: '0644', WorkingDirectory=/home/ubuntu/m169-scripts/KN05_B, ExecStart und ExecStop.",
         )
         check(
-            "Step 4: Task 'systemd' aktiviert und startet Monitoring-Service",
+            "Step 4: Task 'systemd' aktiviert und startet Monitoring-Service mit daemon_reload: true",
             False,
-            "Aktiviere und starte den Service monitoring mit ansible.builtin.systemd.",
+            "Aktiviere und starte den Service monitoring (state: started, enabled: true, daemon_reload: true) mit ansible.builtin.systemd.",
+        )
+        check(
+            "Step 4: Handler 'Reload systemd' ist für systemd daemon_reload konfiguriert",
+            False,
+            "Füge einen Handler 'Reload systemd' mit ansible.builtin.systemd: daemon_reload: true hinzu.",
         )
         return
 
@@ -385,29 +390,29 @@ def check_step_4_ansible_playbook():
         "Füge den Benutzer ubuntu (oder {{ app_user }}) mit ansible.builtin.user zur Gruppe docker hinzu (groups: docker, append: yes).",
     )
 
-    # Check 6: Task 'git' clones monitoring repo
+    # Check 6: Task 'git' clones monitoring repo (repo & dest check)
     has_git_clone = False
     if plays:
         for t, _ in all_tasks:
             git_args = task_has_module(t, ["git", "ansible.builtin.git"])
-            if git_args is not None:
-                s_args = resolve(str(git_args))
-                if isinstance(git_args, dict):
-                    repo_val = resolve(str(git_args.get("repo", "")))
-                    dest_val = resolve(str(git_args.get("dest", "")))
-                    if ("m169-scripts" in repo_val or "gitlab.com" in repo_val) and "m169-scripts" in dest_val:
-                        has_git_clone = True
-                        break
-                elif ("m169-scripts" in s_args or "gitlab.com" in s_args) and "m169-scripts" in s_args:
+            if git_args is not None and isinstance(git_args, dict):
+                repo_val = resolve(str(git_args.get("repo", "")))
+                dest_val = resolve(str(git_args.get("dest", "")))
+                
+                valid_repo = ("gitlab.com/ser-cal/m169-scripts" in repo_val or "m169-scripts.git" in repo_val)
+                valid_dest = ("/home/ubuntu/m169-scripts" in dest_val or dest_val.endswith("m169-scripts"))
+                
+                if valid_repo and valid_dest:
                     has_git_clone = True
                     break
+
     if not has_git_clone:
-        has_git_clone = ("m169-scripts" in content or "gitlab.com" in content) and "git" in content
+        has_git_clone = ("gitlab.com" in content or "m169-scripts.git" in content) and "dest" in content and ("ansible.builtin.git" in content or "git:" in content)
 
     check(
-        "Step 4: Task 'git' klont Monitoring-Repository (m169-scripts)",
+        "Step 4: Task 'git' klont Monitoring-Repository (repo: https://gitlab.com/ser-cal/m169-scripts.git, dest: /home/ubuntu/m169-scripts)",
         has_git_clone,
-        "Klone das Repository https://gitlab.com/ser-cal/m169-scripts.git nach /home/ubuntu/m169-scripts mit ansible.builtin.git.",
+        "Klone das Repository https://gitlab.com/ser-cal/m169-scripts.git nach /home/ubuntu/m169-scripts mit ansible.builtin.git (repo & dest).",
     )
 
     # Check 7: Task 'file' sets ownership on cloned repo
@@ -436,55 +441,77 @@ def check_step_4_ansible_playbook():
         "Setze Rechte/Owner (owner: ubuntu, group: ubuntu) für /home/ubuntu/m169-scripts mit ansible.builtin.file.",
     )
 
-    # Check 8: Task 'copy' creates systemd unit file monitoring.service in KN05_B
+    # Check 8: Task 'copy' creates systemd unit file monitoring.service with detailed content & mode
     has_copy_service = False
     if plays:
         for t, _ in all_tasks:
             copy_args = task_has_module(t, ["copy", "ansible.builtin.copy", "template", "ansible.builtin.template"])
-            if copy_args is not None:
-                s_args = resolve(str(copy_args))
-                if isinstance(copy_args, dict):
-                    dest_val = resolve(str(copy_args.get("dest", "")))
-                    cnt_val = resolve(str(copy_args.get("content", "")))
-                    if "monitoring.service" in dest_val and "KN05_B" in cnt_val and ("docker compose" in cnt_val or "docker-compose" in cnt_val or "ExecStart" in cnt_val):
-                        has_copy_service = True
-                        break
-                elif "monitoring.service" in s_args and "KN05_B" in s_args:
+            if copy_args is not None and isinstance(copy_args, dict):
+                dest_val = resolve(str(copy_args.get("dest", "")))
+                mode_val = resolve(str(copy_args.get("mode", "")))
+                cnt_val = resolve(str(copy_args.get("content", "")))
+                
+                valid_dest = (dest_val == "/etc/systemd/system/monitoring.service")
+                valid_mode = ("644" in mode_val)
+                valid_dir = ("KN05_B" in cnt_val)
+                valid_exec = ("ExecStart" in cnt_val and "ExecStop" in cnt_val)
+                
+                if valid_dest and valid_dir and valid_exec and valid_mode:
                     has_copy_service = True
                     break
     if not has_copy_service:
-        has_copy_service = "monitoring.service" in content and "KN05_B" in content and ("docker compose" in content or "docker-compose" in content)
+        has_copy_service = ("monitoring.service" in content and "KN05_B" in content and "ExecStart" in content and "ExecStop" in content)
 
     check(
-        "Step 4: Task 'copy' erstellt /etc/systemd/system/monitoring.service für Stack in KN05_B",
+        "Step 4: Task 'copy' erstellt /etc/systemd/system/monitoring.service mit WorkingDirectory, ExecStart/ExecStop & mode: '0644'",
         has_copy_service,
-        "Erstelle /etc/systemd/system/monitoring.service mit WorkingDirectory=/home/ubuntu/m169-scripts/KN05_B und ExecStart=/usr/bin/docker compose up -d.",
+        "Erstelle /etc/systemd/system/monitoring.service mit mode: '0644', WorkingDirectory=/home/ubuntu/m169-scripts/KN05_B, ExecStart=/usr/bin/docker compose up -d und ExecStop=/usr/bin/docker compose down.",
     )
 
-    # Check 9: Task 'systemd' enables & starts monitoring service
+    # Check 9: Task 'systemd' enables & starts monitoring service with daemon_reload: true
     has_monitoring_svc = False
     if plays:
         for t, _ in all_tasks:
             sys_args = task_has_module(t, ["systemd", "ansible.builtin.systemd", "service", "ansible.builtin.service"])
-            if sys_args is not None:
-                s_args = resolve(str(sys_args))
-                if isinstance(sys_args, dict):
-                    name_val = resolve(str(sys_args.get("name", "")))
-                    state_val = str(sys_args.get("state", ""))
-                    enabled_val = sys_args.get("enabled")
-                    if name_val == "monitoring" and state_val == "started" and is_truthy(enabled_val):
-                        has_monitoring_svc = True
-                        break
-                elif "monitoring" in s_args and "started" in s_args:
+            if sys_args is not None and isinstance(sys_args, dict):
+                name_val = resolve(str(sys_args.get("name", "")))
+                state_val = str(sys_args.get("state", ""))
+                enabled_val = sys_args.get("enabled")
+                dr_val = sys_args.get("daemon_reload")
+                
+                if name_val in ("monitoring", "monitoring.service") and state_val == "started" and is_truthy(enabled_val) and is_truthy(dr_val):
                     has_monitoring_svc = True
                     break
     if not has_monitoring_svc:
-        has_monitoring_svc = "monitoring" in content and "systemd" in content and "started" in content
+        has_monitoring_svc = ("monitoring" in content and "systemd" in content and "started" in content and "daemon_reload" in content)
 
     check(
-        "Step 4: Task 'systemd' aktiviert und startet Monitoring-Service",
+        "Step 4: Task 'systemd' aktiviert und startet Monitoring-Service mit daemon_reload: true",
         has_monitoring_svc,
-        "Aktiviere und starte den Service 'monitoring' (state: started, enabled: true) mit ansible.builtin.systemd.",
+        "Aktiviere und starte den Service 'monitoring' (state: started, enabled: true, daemon_reload: true) mit ansible.builtin.systemd.",
+    )
+
+    # Check 10: Handler 'Reload systemd'
+    has_reload_handler = False
+    if isinstance(plays, list):
+        for play in plays:
+            if isinstance(play, dict):
+                handlers = play.get("handlers", [])
+                if isinstance(handlers, list):
+                    for h in handlers:
+                        if isinstance(h, dict):
+                            h_sys = task_has_module(h, ["systemd", "ansible.builtin.systemd", "service", "ansible.builtin.service"])
+                            if h_sys is not None and isinstance(h_sys, dict):
+                                if is_truthy(h_sys.get("daemon_reload")):
+                                    has_reload_handler = True
+                                    break
+    if not has_reload_handler:
+        has_reload_handler = ("Reload systemd" in content or "handlers:" in content) and "daemon_reload" in content
+
+    check(
+        "Step 4: Handler 'Reload systemd' ist für systemd daemon_reload konfiguriert",
+        has_reload_handler,
+        "Erstelle einen Handler unter handlers: mit name: 'Reload systemd' und ansible.builtin.systemd: daemon_reload: true.",
     )
 
 
