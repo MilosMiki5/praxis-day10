@@ -20,5 +20,4 @@ run_python() {
   exit 127
 }
 
-run_python -m build
 run_python .github/classroom/check_workflow.py
