@@ -6,7 +6,7 @@ run_python() {
 
   for candidate in .venv/Scripts/python.exe .venv/bin/python python py python3; do
     if { [ -x "$candidate" ] || command -v "$candidate" >/dev/null 2>&1; } &&
-      "$candidate" -c "import build, yaml" >/dev/null 2>&1; then
+      "$candidate" -c "import yaml" >/dev/null 2>&1; then
       "$candidate" "$@"
       return
     fi
@@ -14,9 +14,9 @@ run_python() {
 
   echo "Kein passender Python-Interpreter gefunden."
   echo "Installiere zuerst die Test-Abhängigkeiten:"
-  echo "  python -m pip install build pyyaml"
+  echo "  python -m pip install pyyaml"
   echo "oder unter Windows:"
-  echo "  py -m pip install build pyyaml"
+  echo "  py -m pip install pyyaml"
   exit 127
 }
 
