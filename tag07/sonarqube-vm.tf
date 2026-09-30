@@ -62,6 +62,20 @@ resource "aws_security_group" "sonarqube" {
     cidr_blocks = ["0.0.0.0/0"]  # SonarQube
   }
 
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+   protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Grafana
+}
+
+ingress {
+    from_port   = 9090
+    to_port     = 9090
+   protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Prometheus
+}
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -129,4 +143,11 @@ output "sonarqube_login" {
 output "startup_notice" {
   value       = "SonarQube needs about 5 minutes to start up..."
   description = "Startup time notice"
+}
+
+output "grafana_url" {
+  value = "http://${aws_eip.sonarqube.public_ip}:3000"
+}
+output "prometheus_url" {
+  value = "http://${aws_eip.sonarqube.public_ip}:9090"
 }
